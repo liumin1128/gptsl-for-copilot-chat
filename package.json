@@ -2,7 +2,7 @@
   "name": "gptsl-for-copilot-chat",
   "displayName": "GPTSL for Copilot Chat",
   "description": "Expose company AI Gateway models in VS Code Copilot Chat.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "GPTSLforCopilotChat",
   "repository": {
     "type": "git",
@@ -35,7 +35,6 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:gptsl.openSettings",
     "onLanguageModelChatProvider:gptsl"
   ],
   "main": "./dist/extension.js",
