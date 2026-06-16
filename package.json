@@ -1,0 +1,224 @@
+{
+  "name": "gptsl-for-copilot-chat",
+  "displayName": "GPTSL for Copilot Chat",
+  "description": "Expose company AI Gateway models in VS Code Copilot Chat.",
+  "version": "0.1.1",
+  "publisher": "GPTSLforCopilotChat",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liumin1128/gptsl-for-copilot-chat"
+  },
+  "bugs": {
+    "url": "https://github.com/liumin1128/gptsl-for-copilot-chat/issues"
+  },
+  "homepage": "https://github.com/liumin1128/gptsl-for-copilot-chat#readme",
+  "keywords": [
+    "gptsl",
+    "genai",
+    "copilot",
+    "chat",
+    "language-model",
+    "usage",
+    "status-bar"
+  ],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "AI"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:gptsl.openSettings",
+    "onLanguageModelChatProvider:gptsl"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gptsl.openSettings",
+        "title": "GPTSL: Open Settings"
+      },
+      {
+        "command": "gptsl.refreshUsage",
+        "title": "GPTSL: Refresh Usage"
+      },
+      {
+        "command": "gptsl.toggleUsageDisplayMode",
+        "title": "GPTSL: Toggle Usage Display Mode"
+      }
+    ],
+    "configuration": {
+      "title": "GPTSL",
+      "properties": {
+        "gptslForCopilotChat.apiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "API key used to call GPTSL AI Gateway.",
+          "scope": "application"
+        },
+        "gptslForCopilotChat.baseUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Global gateway base URL used by all GPTSL models. For OpenAI-compatible requests, either the gateway root or its `/v1` URL is accepted.",
+          "scope": "application"
+        },
+        "gptslForCopilotChat.models": {
+          "type": "array",
+          "default": [
+            {
+              "id": "GPT5.5",
+              "context_length": 1000000,
+              "max_tokens": 128000,
+              "vision": true,
+              "apiMode": "openai-responses"
+            },
+            {
+              "id": "GPT5.4",
+              "context_length": 1000000,
+              "max_tokens": 128000,
+              "vision": true,
+              "apiMode": "openai-responses"
+            },
+            {
+              "id": "claude-opus-4-8",
+              "context_length": 1000000,
+              "max_tokens": 128000,
+              "vision": true,
+              "apiMode": "anthropic"
+            },
+            {
+              "id": "claude-sonnet-4-6",
+              "context_length": 200000,
+              "max_tokens": 40960,
+              "vision": true,
+              "apiMode": "anthropic"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "apiMode"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Model identifier sent to the gateway."
+              },
+              "owned_by": {
+                "type": "string",
+                "description": "Optional owner label shown beside the model."
+              },
+              "configId": {
+                "type": "string",
+                "description": "Optional internal config identifier."
+              },
+              "context_length": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum input context tokens."
+              },
+              "max_tokens": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum output tokens."
+              },
+              "vision": {
+                "type": "boolean",
+                "description": "Whether this model supports image input."
+              },
+              "apiMode": {
+                "type": "string",
+                "enum": [
+                  "openai-responses",
+                  "anthropic"
+                ],
+                "description": "Gateway API mode used for this model."
+              },
+              "temperature": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2,
+                "description": "Sampling temperature."
+              }
+            },
+            "additionalProperties": false
+          },
+          "examples": [
+            [
+              {
+                "id": "GPT5.5",
+                "context_length": 1000000,
+                "max_tokens": 128000,
+                "vision": true,
+                "apiMode": "openai-responses",
+                "temperature": 0
+              },
+              {
+                "id": "GPT5.4",
+                "context_length": 1000000,
+                "max_tokens": 128000,
+                "vision": true,
+                "apiMode": "openai-responses"
+              },
+              {
+                "id": "claude-opus-4-8",
+                "context_length": 1000000,
+                "max_tokens": 128000,
+                "vision": true,
+                "apiMode": "anthropic"
+              },
+              {
+                "id": "claude-sonnet-4-6",
+                "context_length": 200000,
+                "max_tokens": 40960,
+                "vision": true,
+                "apiMode": "anthropic",
+                "temperature": 0
+              }
+            ]
+          ],
+          "markdownDescription": "User-defined GPTSL model configurations. Use `GPTSL: Open Settings` to edit this value.",
+          "scope": "application"
+        },
+        "gptslForCopilotChat.usageDisplayMode": {
+          "type": "string",
+          "enum": [
+            "percentage",
+            "amount"
+          ],
+          "default": "percentage",
+          "markdownDescription": "Status bar usage display mode. Use `percentage` to show spend divided by the budget limit, or `amount` to show current spend.",
+          "scope": "application"
+        }
+      }
+    },
+    "languageModelChatProviders": [
+      {
+        "vendor": "gptsl",
+        "displayName": "GPTSL",
+        "managementCommand": "gptsl.openSettings"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "package": "vsce package",
+    "test": "npm run compile",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/vscode": "^1.105.0",
+    "@vscode/vsce": "^3.9.2",
+    "typescript": "^5.8.3"
+  }
+}

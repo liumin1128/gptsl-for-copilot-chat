@@ -1,0 +1,10 @@
+export const GPTSL_VENDOR = 'gptsl';
+export const GPTSL_DISPLAY_NAME = 'GPTSL';
+export const GPTSL_BASE_URL_SETTING = 'gptslForCopilotChat.baseUrl';
+export const GPTSL_API_KEY_SETTING = 'gptslForCopilotChat.apiKey';
+export const LEGACY_GPTSL_API_KEY_SETTING = 'gptsl.apiKey';
+export const GPTSL_MODELS_SETTING = 'gptslForCopilotChat.models';
+export const GPTSL_USAGE_DISPLAY_MODE_SETTING = 'gptslForCopilotChat.usageDisplayMode';
+export const GPTSL_OPEN_SETTINGS_COMMAND = 'gptsl.openSettings';
+export const GPTSL_REFRESH_USAGE_COMMAND = 'gptsl.refreshUsage';
+export const GPTSL_TOGGLE_USAGE_DISPLAY_MODE_COMMAND = 'gptsl.toggleUsageDisplayMode';

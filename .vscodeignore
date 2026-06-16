@@ -1,0 +1,13 @@
+src/**
+test/**
+dist/**/*.map
+.vscode/**
+.git/**
+.DS_Store
+.gitignore
+tsconfig.json
+*.map
+*.vsix
+node_modules/**/.bin/**
+node_modules/typescript/**
+node_modules/@types/**
