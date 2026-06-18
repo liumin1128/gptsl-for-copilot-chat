@@ -13,6 +13,31 @@ export function formatSpend(spend: number): string {
   return USD_FORMATTER.format(spend);
 }
 
+export function formatBudgetLimit(budgetLimit: number, budgetDuration: string | undefined): string {
+  const formatted = formatSpend(budgetLimit);
+  return budgetDuration ? `${formatted} / ${budgetDuration}` : formatted;
+}
+
+export function formatDateTime(value: string | undefined): string {
+  if (!value) {
+    return '—';
+  }
+
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) {
+    return value;
+  }
+
+  const date = new Date(timestamp);
+  const pad = (part: number): string => String(part).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function formatKeyStatus(blocked: boolean | undefined): string {
+  return blocked ? 'Blocked' : 'Active';
+}
+
 export function calculateUsagePercentage(spend: number, budgetLimit: number | undefined): number | undefined {
   if (!Number.isFinite(spend) || budgetLimit === undefined || budgetLimit <= 0) {
     return undefined;

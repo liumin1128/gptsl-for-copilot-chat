@@ -1,7 +1,12 @@
 export interface UsageInfo {
+  blocked?: boolean;
+  budgetDuration?: string;
   budgetLimit?: number;
+  budgetResetAt?: string;
+  expiresAt?: string;
   keyAlias?: string;
   keyName?: string;
+  lastActive?: string;
   spend: number;
   updatedAt?: string;
   userName?: string;
@@ -13,8 +18,13 @@ interface ModelBudgetLimit {
 
 interface KeyInfoResponse {
   info?: {
+    blocked?: unknown;
+    budget_duration?: unknown;
+    budget_reset_at?: unknown;
+    expires?: unknown;
     key_alias?: unknown;
     key_name?: unknown;
+    last_active?: unknown;
     max_budget?: unknown;
     model_max_budget?: unknown;
     spend?: unknown;
@@ -58,18 +68,25 @@ export function parseUsageInfo(data: KeyInfoResponse): UsageInfo {
     throw new Error('Response is missing a valid info.spend value');
   }
 
-  const keyName = typeof data.info?.key_name === 'string' ? data.info.key_name : undefined;
-  const keyAlias = typeof data.info?.key_alias === 'string' ? data.info.key_alias : undefined;
-  const updatedAt = typeof data.info?.updated_at === 'string' ? data.info.updated_at : undefined;
+  const keyAlias = readString(data.info?.key_alias);
 
   return {
+    blocked: typeof data.info?.blocked === 'boolean' ? data.info.blocked : undefined,
+    budgetDuration: readString(data.info?.budget_duration),
     budgetLimit: parseBudgetLimit(data.info?.max_budget, data.info?.model_max_budget),
+    budgetResetAt: readString(data.info?.budget_reset_at),
+    expiresAt: readString(data.info?.expires),
     keyAlias,
-    keyName,
+    keyName: readString(data.info?.key_name),
+    lastActive: readString(data.info?.last_active),
     spend,
-    updatedAt,
+    updatedAt: readString(data.info?.updated_at),
     userName: parseUserName(keyAlias)
   };
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 export function parseUserName(keyAlias: string | undefined): string | undefined {

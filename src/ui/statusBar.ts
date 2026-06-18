@@ -11,7 +11,16 @@ import {
 } from '../config/constants';
 import { resolveUsageBaseUrl } from '../config/baseUrl';
 import { getApiKey, getBaseUrl } from '../config/settings';
-import { buildProgressBar, calculateUsagePercentage, formatPercentage, formatSpend, getProgressRing } from '../usage/format';
+import {
+  buildProgressBar,
+  calculateUsagePercentage,
+  formatBudgetLimit,
+  formatDateTime,
+  formatKeyStatus,
+  formatPercentage,
+  formatSpend,
+  getProgressRing
+} from '../usage/format';
 import { fetchUsageInfo, UsageInfo } from '../usage/usageClient';
 
 type UsageDisplayMode = 'percentage' | 'amount';
@@ -218,14 +227,21 @@ function buildUsageTooltip(
     tooltip.appendMarkdown(`- User: \`${usage.userName}\`\n`);
   }
 
+  tooltip.appendMarkdown(`- Status: \`${formatKeyStatus(usage.blocked)}\`\n`);
   tooltip.appendMarkdown(`- Current usage: \`${formatSpend(usage.spend)}\`\n`);
 
   if (usage.budgetLimit !== undefined) {
-    tooltip.appendMarkdown(`- Budget limit: \`${formatSpend(usage.budgetLimit)}\`\n`);
+    tooltip.appendMarkdown(`- Budget limit: \`${formatBudgetLimit(usage.budgetLimit, usage.budgetDuration)}\`\n`);
   }
 
   tooltip.appendMarkdown(`- Percentage: \`${formatPercentage(percentage)}\`\n`);
   tooltip.appendMarkdown(`- Progress: \`${buildProgressBar(percentage)} ${formatPercentage(percentage)}\`\n`);
+
+  if (usage.budgetResetAt) {
+    tooltip.appendMarkdown(`- Budget reset: \`${formatDateTime(usage.budgetResetAt)}\`\n`);
+  }
+
+  tooltip.appendMarkdown(`- Expires: \`${usage.expiresAt ? formatDateTime(usage.expiresAt) : 'Never'}\`\n`);
   tooltip.appendMarkdown(`- Display mode: \`${displayMode}\`\n`);
 
   if (usage.keyName) {
@@ -236,8 +252,12 @@ function buildUsageTooltip(
     tooltip.appendMarkdown(`- Alias: \`${usage.keyAlias}\`\n`);
   }
 
+  if (usage.lastActive) {
+    tooltip.appendMarkdown(`- Last active: \`${formatDateTime(usage.lastActive)}\`\n`);
+  }
+
   if (usage.updatedAt) {
-    tooltip.appendMarkdown(`- Updated at: \`${usage.updatedAt}\`\n`);
+    tooltip.appendMarkdown(`- Updated at: \`${formatDateTime(usage.updatedAt)}\`\n`);
   }
 
   tooltip.appendMarkdown('\n---\n');
