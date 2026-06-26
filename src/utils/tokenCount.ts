@@ -10,13 +10,29 @@ const IMAGE_TOKEN_ESTIMATE = 1020;
 /** 每个工具调用的固定 token 估算值 */
 const TOOL_CALL_OVERHEAD = 10;
 
+/** ASCII（拉丁文字）约 4 字符/token */
+const CHARS_PER_TOKEN_ASCII = 4;
+
+/** CJK（中日韩）约 1.5 字符/token */
+const CHARS_PER_TOKEN_CJK = 1.5;
+
+/** 匹配 CJK 统一表意文字及常见中日韩字符范围 */
+const CJK_REGEX =
+  /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/g;
+
 /**
  * 估算文本的 token 数量
- * 轻量方案: 字母文字约 4 字符/token，中文约 1.5 字符/token
- * 这里使用统一的 length/4 估算
+ * 区分 CJK 与 ASCII：CJK 约 1.5 字符/token，其余约 4 字符/token
  */
 function estimateTextTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  if (!text) {
+    return 0;
+  }
+  const cjkCount = (text.match(CJK_REGEX) ?? []).length;
+  const asciiCount = text.length - cjkCount;
+  return Math.ceil(
+    cjkCount / CHARS_PER_TOKEN_CJK + asciiCount / CHARS_PER_TOKEN_ASCII,
+  );
 }
 
 /**

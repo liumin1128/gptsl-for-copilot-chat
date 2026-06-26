@@ -214,7 +214,7 @@
   "scripts": {
     "compile": "tsc -p ./",
     "package": "vsce package",
-    "test": "npm run compile",
+    "test": "npm run compile && npx tsx --tsconfig test/tsconfig.json test/pureFunctions.test.ts",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile"
   },
@@ -222,6 +222,7 @@
     "@types/node": "^22.15.21",
     "@types/vscode": "^1.105.0",
     "@vscode/vsce": "^3.9.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.8.3"
   }
 }

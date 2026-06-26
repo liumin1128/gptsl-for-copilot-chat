@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import type * as vscode from "vscode";
 
 /** 支持的图片 MIME 类型集合 */
 const SUPPORTED_IMAGE_MIMES = new Set([

@@ -87,10 +87,11 @@ export class GatewayClient {
           : "auto";
     }
 
-    // Thinking/Reasoning 参数
+    // Thinking/Reasoning 参数（映射到 OpenAI 标准值 low/medium/high）
     const reasoningEffort = extractReasoningEffort(options);
-    if (reasoningEffort && reasoningEffort !== "none") {
-      body.reasoning = { effort: reasoningEffort };
+    const openAIEffort = mapToOpenAIEffort(reasoningEffort);
+    if (openAIEffort) {
+      body.reasoning = { effort: openAIEffort };
     }
 
     const retryConfig = createRetryConfig();
@@ -245,4 +246,22 @@ function extractReasoningEffort(
     return effort;
   }
   return undefined;
+}
+
+/**
+ * 将 GPTSL 思考深度（none/high/max）映射为 OpenAI reasoning.effort 标准值
+ * OpenAI 期望 low/medium/high；none 表示关闭，返回 undefined
+ */
+function mapToOpenAIEffort(
+  effort: string | undefined,
+): "low" | "medium" | "high" | undefined {
+  switch (effort) {
+    case "high":
+      return "medium";
+    case "max":
+      return "high";
+    // none 或未设置: 关闭 reasoning
+    default:
+      return undefined;
+  }
 }
