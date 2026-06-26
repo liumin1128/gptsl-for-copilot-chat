@@ -3,7 +3,7 @@ import { isProviderConfig, GptslModelConfig } from "../config/modelConfig";
 import { getApiKey, getBaseUrl, getModelConfigs } from "../config/settings";
 import { GatewayClient } from "../gateway/GatewayClient";
 import { parseModelStream } from "../gateway/streamParser";
-import { extractTextFromRequestMessage } from "../gateway/textParts";
+import { countTokens } from "../utils/tokenCount";
 import { toLanguageModelInfo } from "./modelInfo";
 
 /** VS Code proposed API: LanguageModelThinkingPart */
@@ -210,10 +210,7 @@ export class GptslLanguageModelProvider
     text: string | vscode.LanguageModelChatRequestMessage,
     _token: vscode.CancellationToken,
   ): Promise<number> {
-    const content =
-      typeof text === "string" ? text : extractTextFromRequestMessage(text);
-
-    return Math.ceil(content.length / 4);
+    return countTokens(text);
   }
 
   dispose(): void {
