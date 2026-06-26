@@ -41,10 +41,17 @@ export interface OpenAIResponsesFunctionCallOutput {
   status: "completed";
 }
 
+/** OpenAI Responses API reasoning item（thinking 历史回灌） */
+export interface OpenAIResponsesReasoningItem {
+  type: "reasoning";
+  summary: { type: "summary_text"; text: string }[];
+}
+
 export type OpenAIResponsesInputItem =
   | OpenAIResponsesInputMessage
   | OpenAIResponsesFunctionCall
-  | OpenAIResponsesFunctionCallOutput;
+  | OpenAIResponsesFunctionCallOutput
+  | OpenAIResponsesReasoningItem;
 
 /** Anthropic 消息格式中的内容块 */
 export interface AnthropicTextBlock {

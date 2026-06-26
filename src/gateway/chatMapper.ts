@@ -13,6 +13,48 @@ import {
 } from "./types";
 import { isImagePart, toBase64 } from "../utils/imageHelper";
 
+/** VS Code proposed API: LanguageModelThinkingPart (duck-typing) */
+const LanguageModelThinkingPart = (
+  vscode as unknown as {
+    LanguageModelThinkingPart?: new (
+      value: string | string[],
+      id?: string,
+    ) => { value: string | string[]; id?: string };
+  }
+).LanguageModelThinkingPart;
+
+/** 类型守卫: 判断是否为 thinking part */
+function isThinkingPart(
+  part: unknown,
+): part is { value: string | string[]; id?: string } {
+  if (!part || typeof part !== "object") {
+    return false;
+  }
+  // 尝试 instanceof
+  if (LanguageModelThinkingPart && part instanceof LanguageModelThinkingPart) {
+    return true;
+  }
+  // 回退 duck-typing: 有 value 且有 id 属性，且不是 TextPart/ToolCallPart
+  if (part instanceof vscode.LanguageModelTextPart) {
+    return false;
+  }
+  if (part instanceof vscode.LanguageModelToolCallPart) {
+    return false;
+  }
+  const obj = part as Record<string, unknown>;
+  return "value" in obj && "id" in obj;
+}
+
+/** 从 thinking part 中提取文本 */
+function extractThinkingText(
+  part: { value: string | string[] },
+): string {
+  if (Array.isArray(part.value)) {
+    return part.value.join("");
+  }
+  return part.value;
+}
+
 // ---- OpenAI Responses API 格式转换 ----
 
 export interface OpenAIResponsesConversion {
@@ -29,6 +71,7 @@ export function toOpenAIResponsesInput(
   for (const m of messages) {
     const role = mapRole(m);
     const textParts: string[] = [];
+    const thinkingParts: string[] = [];
     const imageParts: OpenAIResponsesInputImage[] = [];
     const toolCalls: OpenAIResponsesFunctionCall[] = [];
     const toolResults: OpenAIResponsesFunctionCallOutput[] = [];
@@ -70,6 +113,8 @@ export function toOpenAIResponsesInput(
           image_url: imageUrl,
           detail: "high",
         });
+      } else if (isThinkingPart(part)) {
+        thinkingParts.push(extractThinkingText(part));
       }
     }
 
@@ -81,8 +126,15 @@ export function toOpenAIResponsesInput(
       continue;
     }
 
-    // 助手消息: 先发文本，再发工具调用
+    // 助手消息: 先发 reasoning（thinking 回灌）, 再发文本，再发工具调用
     if (role === "assistant") {
+      // 历史 thinking 回灌为 reasoning 项
+      for (const tp of thinkingParts) {
+        input.push({
+          type: "reasoning",
+          summary: [{ type: "summary_text", text: tp }],
+        } as unknown as OpenAIResponsesInputItem);
+      }
       if (joinedText) {
         input.push({ role: "assistant", content: joinedText });
       }
@@ -131,6 +183,7 @@ export function toAnthropicMessages(
   for (const m of messages) {
     const role = mapRole(m);
     const textParts: string[] = [];
+    const thinkingParts: string[] = [];
     const imageBlocks: AnthropicImageBlock[] = [];
     const toolCalls: AnthropicToolUseBlock[] = [];
     const toolResults: AnthropicToolResultBlock[] = [];
@@ -166,6 +219,8 @@ export function toAnthropicMessages(
             data: base64,
           },
         });
+      } else if (isThinkingPart(part)) {
+        thinkingParts.push(extractThinkingText(part));
       }
     }
 
@@ -179,6 +234,13 @@ export function toAnthropicMessages(
 
     // 构建内容块
     const contentBlocks: AnthropicContentBlock[] = [];
+
+    // 历史 thinking 回灌 (assistant 消息中 thinking block 应排在文本之前)
+    if (role === "assistant") {
+      for (const tp of thinkingParts) {
+        contentBlocks.push({ type: "thinking", thinking: tp });
+      }
+    }
 
     if (joinedText) {
       contentBlocks.push({ type: "text", text: joinedText });
