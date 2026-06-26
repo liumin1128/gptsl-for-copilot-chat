@@ -46,9 +46,7 @@ function isThinkingPart(
 }
 
 /** 从 thinking part 中提取文本 */
-function extractThinkingText(
-  part: { value: string | string[] },
-): string {
+function extractThinkingText(part: { value: string | string[] }): string {
   if (Array.isArray(part.value)) {
     return part.value.join("");
   }
@@ -152,7 +150,10 @@ export function toOpenAIResponsesInput(
     // 用户消息: 有图片时用数组格式，无图片时保持字符串
     if (role === "user" && (joinedText || imageParts.length > 0)) {
       if (imageParts.length > 0) {
-        const contentItems: (OpenAIResponsesInputText | OpenAIResponsesInputImage)[] = [];
+        const contentItems: (
+          | OpenAIResponsesInputText
+          | OpenAIResponsesInputImage
+        )[] = [];
         if (joinedText) {
           contentItems.push({ type: "input_text", text: joinedText });
         }
@@ -303,6 +304,19 @@ function isToolResultPart(
   return typeof obj.callId === "string" && "content" in obj;
 }
 
+/**
+ * 判断是否为 VS Code 内部元数据 data part（如 prompt caching 的 cache_control 标记）。
+ * 这类 part 携带 mimeType + data，并非真实工具输出文本，需要跳过，
+ * 否则 JSON.stringify 会把 {"$mid":24,"mimeType":"cache_control",...} 注入到内容里。
+ */
+function isMetadataDataPart(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return typeof obj.mimeType === "string" && "data" in obj;
+}
+
 /** 从工具结果 part 中提取文本 */
 function collectToolResultText(part: {
   content?: ReadonlyArray<unknown>;
@@ -313,6 +327,9 @@ function collectToolResultText(part: {
       text += c.value;
     } else if (typeof c === "string") {
       text += c;
+    } else if (isImagePart(c) || isMetadataDataPart(c)) {
+      // 图片由上层单独处理；cache_control 等元数据 part 直接跳过
+      continue;
     } else {
       try {
         text += JSON.stringify(c);
