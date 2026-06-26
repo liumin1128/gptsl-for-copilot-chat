@@ -22,6 +22,7 @@ export class GatewayClient {
     modelConfig: GptslModelConfig,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
+    token?: vscode.CancellationToken,
   ): Promise<ReadableStream<Uint8Array>> {
     const versionedBaseUrl = resolveVersionedBaseUrl(baseUrl);
     if (!versionedBaseUrl) {
@@ -37,6 +38,7 @@ export class GatewayClient {
         modelConfig,
         messages,
         options,
+        token,
       );
     }
 
@@ -46,6 +48,7 @@ export class GatewayClient {
       modelConfig,
       messages,
       options,
+      token,
     );
   }
 
@@ -55,6 +58,7 @@ export class GatewayClient {
     modelConfig: GptslModelConfig,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
+    token?: vscode.CancellationToken,
   ): Promise<ReadableStream<Uint8Array>> {
     const { input, instructions } = toOpenAIResponsesInput(messages);
     const tools = this.convertToOpenAIResponsesTools(options);
@@ -84,6 +88,7 @@ export class GatewayClient {
     }
 
     const retryConfig = createRetryConfig();
+    const abortController = createAbortController(token);
 
     return executeWithRetry(async () => {
       const response = await fetch(`${baseUrl}/responses`, {
@@ -93,6 +98,7 @@ export class GatewayClient {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
+        signal: abortController.signal,
       });
 
       if (!response.ok || !response.body) {
@@ -112,6 +118,7 @@ export class GatewayClient {
     modelConfig: GptslModelConfig,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
+    token?: vscode.CancellationToken,
   ): Promise<ReadableStream<Uint8Array>> {
     const { messages: anthropicMessages, system } =
       toAnthropicMessages(messages);
@@ -138,6 +145,7 @@ export class GatewayClient {
     }
 
     const retryConfig = createRetryConfig();
+    const abortController = createAbortController(token);
 
     return executeWithRetry(async () => {
       const response = await fetch(`${baseUrl}/messages`, {
@@ -148,6 +156,7 @@ export class GatewayClient {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
+        signal: abortController.signal,
       });
 
       if (!response.ok || !response.body) {
@@ -189,4 +198,22 @@ export class GatewayClient {
         DEFAULT_INPUT_SCHEMA,
     }));
   }
+}
+
+/**
+ * 创建 AbortController 并与 CancellationToken 关联
+ * 当用户取消请求时，自动 abort 底层 fetch
+ */
+function createAbortController(
+  token?: vscode.CancellationToken,
+): AbortController {
+  const controller = new AbortController();
+  if (token) {
+    token.onCancellationRequested(() => {
+      if (!controller.signal.aborted) {
+        controller.abort();
+      }
+    });
+  }
+  return controller;
 }

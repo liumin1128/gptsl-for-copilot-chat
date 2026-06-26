@@ -181,6 +181,7 @@ export class GptslLanguageModelProvider
         modelConfig,
         messages,
         options,
+        token,
       );
 
       for await (const part of parseModelStream(modelConfig, stream)) {
@@ -226,6 +227,10 @@ export class GptslLanguageModelProvider
       endThinking();
     } catch (err) {
       endThinking();
+      // 用户取消请求时静默处理，不向上抛错
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
       throw err;
     }
   }

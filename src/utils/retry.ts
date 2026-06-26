@@ -65,6 +65,11 @@ export async function executeWithRetry<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
+      // AbortError (用户取消) 不应重试
+      if (lastError.name === "AbortError") {
+        throw lastError;
+      }
+
       const isRetryableStatusError = retryableStatusCodes.some((code) =>
         lastError?.message.includes(`[${code}]`),
       );
