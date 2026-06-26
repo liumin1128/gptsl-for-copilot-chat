@@ -48,10 +48,18 @@ export interface AnthropicToolResultBlock {
   content: string;
 }
 
+/** Anthropic thinking block */
+export interface AnthropicThinkingBlock {
+  type: "thinking";
+  thinking: string;
+  signature?: string;
+}
+
 export type AnthropicContentBlock =
   | AnthropicTextBlock
   | AnthropicToolUseBlock
-  | AnthropicToolResultBlock;
+  | AnthropicToolResultBlock
+  | AnthropicThinkingBlock;
 
 export interface AnthropicMessage {
   role: "user" | "assistant";
@@ -71,7 +79,15 @@ export interface StreamToolCallPart {
   arguments: string;
 }
 
-export type StreamPart = StreamTextPart | StreamToolCallPart;
+export interface StreamThinkingPart {
+  type: "thinking";
+  text: string;
+}
+
+export type StreamPart =
+  | StreamTextPart
+  | StreamToolCallPart
+  | StreamThinkingPart;
 
 export interface OpenAIResponsesRequest {
   model: string;
@@ -104,4 +120,29 @@ export interface AnthropicToolDef {
   name: string;
   description?: string;
   input_schema?: Record<string, unknown>;
+}
+
+// ---- Token 用量 ----
+
+/** Token 用量详情 */
+export interface TokenUsageDetails {
+  cached_tokens: number;
+}
+
+/** 标准 Token 用量结构 */
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  prompt_tokens_details?: TokenUsageDetails;
+}
+
+// ---- 重试配置 ----
+
+/** 重试配置 */
+export interface RetryConfig {
+  enabled?: boolean;
+  max_attempts?: number;
+  interval_ms?: number;
+  status_codes?: number[];
 }

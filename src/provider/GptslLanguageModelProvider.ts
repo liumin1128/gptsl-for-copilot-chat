@@ -6,6 +6,19 @@ import { parseModelStream } from "../gateway/streamParser";
 import { extractTextFromRequestMessage } from "../gateway/textParts";
 import { toLanguageModelInfo } from "./modelInfo";
 
+/** VS Code proposed API: LanguageModelThinkingPart */
+const LanguageModelThinkingPart = (
+  vscode as unknown as {
+    LanguageModelThinkingPart?: new (
+      text: string,
+      id: string,
+    ) => vscode.LanguageModelResponsePart;
+  }
+).LanguageModelThinkingPart;
+
+/** Token usage data part MIME type */
+const USAGE_MIME_TYPE = "usage";
+
 export class GptslLanguageModelProvider
   implements vscode.LanguageModelChatProvider
 {
@@ -101,36 +114,94 @@ export class GptslLanguageModelProvider
       throw new Error(`GPTSL model is not configured: ${model.id}`);
     }
 
-    const stream = await this.gatewayClient.streamModelResponse(
-      apiKey,
-      baseUrl,
-      modelConfig,
-      messages,
-      options,
-    );
+    // Thinking 状态管理
+    let currentThinkingId: string | null = null;
+    let thinkingBuffer = "";
+    let thinkingFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
-    for await (const part of parseModelStream(modelConfig, stream)) {
-      if (token.isCancellationRequested) {
+    const flushThinkingBuffer = (): void => {
+      if (thinkingFlushTimer) {
+        clearTimeout(thinkingFlushTimer);
+        thinkingFlushTimer = null;
+      }
+      if (thinkingBuffer && currentThinkingId && LanguageModelThinkingPart) {
+        progress.report(
+          new LanguageModelThinkingPart(thinkingBuffer, currentThinkingId),
+        );
+        thinkingBuffer = "";
+      }
+    };
+
+    const bufferThinkingContent = (text: string): void => {
+      if (!LanguageModelThinkingPart) {
         return;
       }
-
-      if (part.type === "text") {
-        progress.report(new vscode.LanguageModelTextPart(part.text));
-      } else if (part.type === "tool_call") {
-        let parsedArgs: Record<string, unknown>;
-        try {
-          parsedArgs = JSON.parse(part.arguments);
-        } catch {
-          parsedArgs = {};
-        }
-        progress.report(
-          new vscode.LanguageModelToolCallPart(
-            part.callId,
-            part.name,
-            parsedArgs,
-          ),
-        );
+      if (!currentThinkingId) {
+        currentThinkingId = `thinking_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       }
+      thinkingBuffer += text;
+      if (!thinkingFlushTimer) {
+        thinkingFlushTimer = setTimeout(flushThinkingBuffer, 100);
+      }
+    };
+
+    const endThinking = (): void => {
+      flushThinkingBuffer();
+      if (currentThinkingId && LanguageModelThinkingPart) {
+        try {
+          progress.report(new LanguageModelThinkingPart("", currentThinkingId));
+        } catch {
+          /* ignore */
+        }
+      }
+      currentThinkingId = null;
+      thinkingBuffer = "";
+      if (thinkingFlushTimer) {
+        clearTimeout(thinkingFlushTimer);
+        thinkingFlushTimer = null;
+      }
+    };
+
+    try {
+      const stream = await this.gatewayClient.streamModelResponse(
+        apiKey,
+        baseUrl,
+        modelConfig,
+        messages,
+        options,
+      );
+
+      for await (const part of parseModelStream(modelConfig, stream)) {
+        if (token.isCancellationRequested) {
+          return;
+        }
+
+        if (part.type === "text") {
+          progress.report(new vscode.LanguageModelTextPart(part.text));
+        } else if (part.type === "thinking") {
+          bufferThinkingContent(part.text);
+        } else if (part.type === "tool_call") {
+          let parsedArgs: Record<string, unknown>;
+          try {
+            parsedArgs = JSON.parse(part.arguments);
+          } catch {
+            parsedArgs = {};
+          }
+          progress.report(
+            new vscode.LanguageModelToolCallPart(
+              part.callId,
+              part.name,
+              parsedArgs,
+            ),
+          );
+        }
+      }
+
+      // 流结束，清理 thinking
+      endThinking();
+    } catch (err) {
+      endThinking();
+      throw err;
     }
   }
 

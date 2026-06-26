@@ -1,5 +1,5 @@
 import { GptslModelConfig } from "../config/modelConfig";
-import { StreamPart } from "./types";
+import { StreamPart, StreamThinkingPart } from "./types";
 
 // ---- 公共入口 ----
 
@@ -13,6 +13,54 @@ export function parseModelStream(
   return parseOpenAIResponsesStream(stream);
 }
 
+// ---- Thinking 缓冲区 ----
+
+class ThinkingBuffer {
+  private buffer = "";
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private readonly flushDelayMs = 100;
+  private pending: string[] = [];
+
+  /** 追加 thinking 文本 */
+  add(text: string): void {
+    this.buffer += text;
+    if (!this.timer) {
+      this.timer = setTimeout(() => {
+        this.doFlush();
+      }, this.flushDelayMs);
+    }
+  }
+
+  /** 立即清空缓冲区，返回待产出的 thinking 文本数组 */
+  flush(): string[] {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.doFlush();
+    const result = this.pending;
+    this.pending = [];
+    return result;
+  }
+
+  private doFlush(): void {
+    if (this.buffer) {
+      this.pending.push(this.buffer);
+      this.buffer = "";
+    }
+  }
+}
+
+/** 从 ThinkingBuffer 中取出所有待产出的 thinking 并 yield */
+async function* yieldThinkingFromBuffer(
+  buf: ThinkingBuffer,
+): AsyncGenerator<StreamPart> {
+  const parts = buf.flush();
+  for (const text of parts) {
+    yield { type: "thinking", text };
+  }
+}
+
 // ---- OpenAI Responses API 流解析 ----
 
 async function* parseOpenAIResponsesStream(
@@ -23,6 +71,7 @@ async function* parseOpenAIResponsesStream(
     { id?: string; name?: string; args: string }
   >();
   const completedIndices = new Set<number>();
+  const thinkingBuf = new ThinkingBuffer();
 
   for await (const line of readSseDataLines(stream)) {
     const payload = safeJsonParse(line);
@@ -33,10 +82,18 @@ async function* parseOpenAIResponsesStream(
     const eventType = typeof payload.type === "string" ? payload.type : "";
 
     switch (eventType) {
+      // ---- 文本 ----
       case "response.output_text.delta": {
         const delta = typeof payload.delta === "string" ? payload.delta : "";
         if (delta) {
-          yield { type: "text", text: delta };
+          const { text, thinkingParts } = extractXmlThinkBlocks(delta);
+          for (const tp of thinkingParts) {
+            thinkingBuf.add(tp);
+          }
+          yield* yieldThinkingFromBuffer(thinkingBuf);
+          if (text) {
+            yield { type: "text", text };
+          }
         }
         break;
       }
@@ -44,11 +101,41 @@ async function* parseOpenAIResponsesStream(
       case "response.output_text.done": {
         const text = typeof payload.text === "string" ? payload.text : "";
         if (text) {
-          yield { type: "text", text };
+          const { text: cleanText, thinkingParts } =
+            extractXmlThinkBlocks(text);
+          for (const tp of thinkingParts) {
+            thinkingBuf.add(tp);
+          }
+          yield* yieldThinkingFromBuffer(thinkingBuf);
+          if (cleanText) {
+            yield { type: "text", text: cleanText };
+          }
         }
         break;
       }
 
+      // ---- Thinking/Reasoning ----
+      case "response.reasoning.delta":
+      case "response.reasoning_text.delta":
+      case "response.reasoning_summary.delta":
+      case "response.reasoning_summary_text.delta": {
+        const delta = extractReasoningText(payload);
+        if (delta) {
+          thinkingBuf.add(delta);
+          yield* yieldThinkingFromBuffer(thinkingBuf);
+        }
+        break;
+      }
+
+      case "response.reasoning.done":
+      case "response.reasoning_text.done":
+      case "response.reasoning_summary.done":
+      case "response.reasoning_summary_text.done": {
+        yield* yieldThinkingFromBuffer(thinkingBuf);
+        break;
+      }
+
+      // ---- 工具调用 ----
       case "response.function_call_arguments.delta": {
         const idx =
           typeof payload.output_index === "number" ? payload.output_index : 0;
@@ -138,7 +225,8 @@ async function* parseOpenAIResponsesStream(
     }
   }
 
-  // 流结束，清空未发射的缓冲
+  // 流结束，清空缓冲区
+  yield* yieldThinkingFromBuffer(thinkingBuf);
   for (const [, buf] of toolCallBuffers) {
     const part = buildToolCallPart(buf);
     if (part) {
@@ -157,6 +245,7 @@ async function* parseAnthropicStream(
     { id?: string; name?: string; args: string }
   >();
   const completedIndices = new Set<number>();
+  const thinkingBuf = new ThinkingBuffer();
 
   for await (const line of readSseDataLines(stream)) {
     const payload = safeJsonParse(line);
@@ -197,6 +286,12 @@ async function* parseAnthropicStream(
           if (emitted) {
             yield emitted;
           }
+        } else if (
+          delta.type === "thinking_delta" &&
+          typeof delta.thinking === "string"
+        ) {
+          thinkingBuf.add(delta.thinking);
+          yield* yieldThinkingFromBuffer(thinkingBuf);
         }
         break;
       }
@@ -212,12 +307,20 @@ async function* parseAnthropicStream(
             name: typeof block.name === "string" ? block.name : "",
             args: "",
           });
+        } else if (
+          block &&
+          block.type === "thinking" &&
+          typeof block.thinking === "string"
+        ) {
+          thinkingBuf.add(block.thinking);
+          yield* yieldThinkingFromBuffer(thinkingBuf);
         }
         break;
       }
 
       case "content_block_stop":
       case "message_stop": {
+        yield* yieldThinkingFromBuffer(thinkingBuf);
         for (const [idx, buf] of toolCallBuffers) {
           if (completedIndices.has(idx)) {
             continue;
@@ -233,7 +336,8 @@ async function* parseAnthropicStream(
     }
   }
 
-  // 流结束，清空剩余缓冲
+  // 流结束，清空缓冲区
+  yield* yieldThinkingFromBuffer(thinkingBuf);
   for (const [, buf] of toolCallBuffers) {
     const part = buildToolCallPart(buf);
     if (part) {
@@ -301,6 +405,76 @@ function isCompleteJson(text: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ---- Thinking/Reasoning 辅助 ----
+
+/**
+ * 从 payload 中提取 reasoning 文本
+ * 支持多种字段: delta, text, reasoning, summary
+ */
+function extractReasoningText(payload: Record<string, unknown>): string {
+  const candidates = [
+    payload.delta,
+    payload.text,
+    payload.reasoning,
+    payload.summary,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.length > 0) {
+      // 过滤掉 reasoning config 值 (high/medium/low 等)
+      if (/^(high|medium|low|none|auto)$/i.test(c.trim())) {
+        continue;
+      }
+      return c;
+    }
+  }
+  return "";
+}
+
+/**
+ * 从文本中提取 XML <think>...</think> 块
+ * 返回纯净文本和 thinking 内容数组
+ */
+function extractXmlThinkBlocks(input: string): {
+  text: string;
+  thinkingParts: string[];
+} {
+  const THINK_START = "<think>";
+  const THINK_END = "</think>";
+
+  if (!input.includes(THINK_START)) {
+    return { text: input, thinkingParts: [] };
+  }
+
+  const thinkingParts: string[] = [];
+  let text = "";
+  let remaining = input;
+
+  while (remaining.length > 0) {
+    const startIdx = remaining.indexOf(THINK_START);
+    if (startIdx === -1) {
+      text += remaining;
+      break;
+    }
+
+    // 起始标签之前的文本
+    text += remaining.slice(0, startIdx);
+    remaining = remaining.slice(startIdx + THINK_START.length);
+
+    // 查找结束标签
+    const endIdx = remaining.indexOf(THINK_END);
+    if (endIdx === -1) {
+      // 未闭合的 think 标签，全部当作 thinking
+      thinkingParts.push(remaining);
+      break;
+    }
+
+    thinkingParts.push(remaining.slice(0, endIdx));
+    remaining = remaining.slice(endIdx + THINK_END.length);
+  }
+
+  return { text, thinkingParts };
 }
 
 // ---- SSE 行读取 ----

@@ -8,6 +8,7 @@ import {
   AnthropicMessage,
   AnthropicToolDef,
 } from "./types";
+import { createRetryConfig, executeWithRetry } from "../utils/retry";
 
 const DEFAULT_INPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -82,23 +83,27 @@ export class GatewayClient {
           : "auto";
     }
 
-    const response = await fetch(`${baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    const retryConfig = createRetryConfig();
 
-    if (!response.ok || !response.body) {
-      const detail = await response.text().catch(() => "");
-      throw new Error(
-        `GPTSL chat request failed: ${response.status} ${response.statusText}${detail ? ` - ${detail}` : ""}`,
-      );
-    }
+    return executeWithRetry(async () => {
+      const response = await fetch(`${baseUrl}/responses`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
 
-    return response.body;
+      if (!response.ok || !response.body) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(
+          `GPTSL chat request failed: [${response.status}] ${response.statusText}${detail ? ` - ${detail}` : ""}`,
+        );
+      }
+
+      return response.body;
+    }, retryConfig);
   }
 
   private async sendAnthropicRequest(
@@ -132,24 +137,28 @@ export class GatewayClient {
       body.tool_choice = { type: "auto" };
     }
 
-    const response = await fetch(`${baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    const retryConfig = createRetryConfig();
 
-    if (!response.ok || !response.body) {
-      const detail = await response.text().catch(() => "");
-      throw new Error(
-        `GPTSL chat request failed: ${response.status} ${response.statusText}${detail ? ` - ${detail}` : ""}`,
-      );
-    }
+    return executeWithRetry(async () => {
+      const response = await fetch(`${baseUrl}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
 
-    return response.body;
+      if (!response.ok || !response.body) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(
+          `GPTSL chat request failed: [${response.status}] ${response.statusText}${detail ? ` - ${detail}` : ""}`,
+        );
+      }
+
+      return response.body;
+    }, retryConfig);
   }
 
   private convertToOpenAIResponsesTools(
