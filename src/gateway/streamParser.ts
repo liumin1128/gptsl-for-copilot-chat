@@ -1,14 +1,10 @@
-import { GptslModelConfig } from '../config/modelConfig';
-import { parseAnthropicStream } from './sseParser';
-import { parseOpenAIResponsesStream } from './sseParser';
+import { GptslModelConfig } from "../config/modelConfig";
+import { parseModelStream as parseStream } from "./sseParser";
+import { StreamPart } from "./types";
 
 export function parseModelStream(
   modelConfig: GptslModelConfig,
-  stream: ReadableStream<Uint8Array>
-): AsyncGenerator<string> {
-  if (modelConfig.apiMode === 'anthropic') {
-    return parseAnthropicStream(stream);
-  }
-
-  return parseOpenAIResponsesStream(stream);
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<StreamPart> {
+  return parseStream(modelConfig, stream);
 }

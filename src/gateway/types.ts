@@ -1,18 +1,107 @@
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: "system" | "user" | "assistant";
   content: string;
 }
 
+/** VS Code 消息转换为网关消息时使用的中间格式 */
+export interface OpenAIResponsesInputMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+export interface OpenAIResponsesFunctionCall {
+  type: "function_call";
+  call_id: string;
+  name: string;
+  arguments: string;
+  status: "completed";
+}
+
+export interface OpenAIResponsesFunctionCallOutput {
+  type: "function_call_output";
+  call_id: string;
+  output: string;
+  status: "completed";
+}
+
+export type OpenAIResponsesInputItem =
+  | OpenAIResponsesInputMessage
+  | OpenAIResponsesFunctionCall
+  | OpenAIResponsesFunctionCallOutput;
+
+/** Anthropic 消息格式中的内容块 */
+export interface AnthropicTextBlock {
+  type: "text";
+  text: string;
+}
+
+export interface AnthropicToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface AnthropicToolResultBlock {
+  type: "tool_result";
+  tool_use_id: string;
+  content: string;
+}
+
+export type AnthropicContentBlock =
+  | AnthropicTextBlock
+  | AnthropicToolUseBlock
+  | AnthropicToolResultBlock;
+
+export interface AnthropicMessage {
+  role: "user" | "assistant";
+  content: AnthropicContentBlock[];
+}
+
+/** 流解析器产出的统一格式 */
+export interface StreamTextPart {
+  type: "text";
+  text: string;
+}
+
+export interface StreamToolCallPart {
+  type: "tool_call";
+  callId: string;
+  name: string;
+  arguments: string;
+}
+
+export type StreamPart = StreamTextPart | StreamToolCallPart;
+
 export interface OpenAIResponsesRequest {
   model: string;
-  input: ChatMessage[];
+  input: OpenAIResponsesInputItem[];
   stream: true;
   max_output_tokens?: number;
+  instructions?: string;
+  tools?: OpenAIResponsesToolDef[];
+  tool_choice?: "auto" | { type: "function"; name: string };
+}
+
+export interface OpenAIResponsesToolDef {
+  type: "function";
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
 }
 
 export interface AnthropicMessagesRequest {
   model: string;
-  messages: ChatMessage[];
+  messages: AnthropicMessage[];
   stream: true;
   max_tokens?: number;
+  system?: string;
+  tools?: AnthropicToolDef[];
+  tool_choice?: { type: "auto" } | { type: "tool"; name: string };
+}
+
+export interface AnthropicToolDef {
+  name: string;
+  description?: string;
+  input_schema?: Record<string, unknown>;
 }
