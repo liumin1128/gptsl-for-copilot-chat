@@ -38,9 +38,7 @@ function estimateTextTokens(text: string): number {
 /**
  * 计算消息中所有 part 的 token 估算值
  */
-function countPartsTokens(
-  parts: ReadonlyArray<unknown>,
-): number {
+function countPartsTokens(parts: ReadonlyArray<unknown>): number {
   let total = 0;
 
   for (const part of parts) {
