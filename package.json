@@ -146,6 +146,10 @@
                 "minimum": 0,
                 "maximum": 2,
                 "description": "Sampling temperature."
+              },
+              "thinking": {
+                "type": "boolean",
+                "description": "Enable thinking/reasoning capability."
               }
             },
             "additionalProperties": false

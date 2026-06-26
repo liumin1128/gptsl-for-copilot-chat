@@ -87,6 +87,12 @@ export class GatewayClient {
           : "auto";
     }
 
+    // Thinking/Reasoning 参数
+    const reasoningEffort = extractReasoningEffort(options);
+    if (reasoningEffort && reasoningEffort !== "none") {
+      body.reasoning = { effort: reasoningEffort };
+    }
+
     const retryConfig = createRetryConfig();
     const abortController = createAbortController(token);
 
@@ -142,6 +148,15 @@ export class GatewayClient {
     if (tools.length > 0) {
       body.tools = tools;
       body.tool_choice = { type: "auto" };
+    }
+
+    // Thinking 参数 (Anthropic)
+    const reasoningEffort = extractReasoningEffort(options);
+    if (reasoningEffort && reasoningEffort !== "none" && modelConfig.thinking) {
+      const budgetTokens = modelConfig.max_tokens
+        ? Math.floor(modelConfig.max_tokens * 0.8)
+        : 4096;
+      body.thinking = { type: "enabled", budget_tokens: budgetTokens };
     }
 
     const retryConfig = createRetryConfig();
@@ -216,4 +231,18 @@ function createAbortController(
     });
   }
   return controller;
+}
+
+/**
+ * 从 modelOptions 中提取 reasoningEffort 值
+ * 用户在模型 picker 中选择的思考深度
+ */
+function extractReasoningEffort(
+  options: vscode.ProvideLanguageModelChatResponseOptions,
+): string | undefined {
+  const effort = options.modelOptions?.reasoningEffort;
+  if (typeof effort === "string" && effort.length > 0) {
+    return effort;
+  }
+  return undefined;
 }
