@@ -112,10 +112,17 @@ export interface StreamThinkingPart {
   text: string;
 }
 
+export interface StreamUsagePart {
+  type: "usage";
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export type StreamPart =
   | StreamTextPart
   | StreamToolCallPart
-  | StreamThinkingPart;
+  | StreamThinkingPart
+  | StreamUsagePart;
 
 export interface OpenAIResponsesRequest {
   model: string;

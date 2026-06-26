@@ -1,5 +1,5 @@
 import { GptslModelConfig } from "../config/modelConfig";
-import { StreamPart, StreamThinkingPart } from "./types";
+import { StreamPart, StreamThinkingPart, StreamUsagePart } from "./types";
 
 // ---- 公共入口 ----
 
@@ -135,6 +135,23 @@ async function* parseOpenAIResponsesStream(
         break;
       }
 
+      // ---- Usage (token 用量) ----
+      case "response.completed":
+      case "response.done": {
+        const resp = payload.response as Record<string, unknown> | undefined;
+        if (resp?.usage) {
+          const usage = resp.usage as Record<string, unknown>;
+          const inputTokens =
+            typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
+          const outputTokens =
+            typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+          if (inputTokens > 0 || outputTokens > 0) {
+            yield { type: "usage", inputTokens, outputTokens } satisfies StreamUsagePart;
+          }
+        }
+        break;
+      }
+
       // ---- 工具调用 ----
       case "response.function_call_arguments.delta": {
         const idx =
@@ -246,6 +263,7 @@ async function* parseAnthropicStream(
   >();
   const completedIndices = new Set<number>();
   const thinkingBuf = new ThinkingBuffer();
+  let anthropicInputTokens = 0;
 
   for await (const line of readSseDataLines(stream)) {
     const payload = safeJsonParse(line);
@@ -256,6 +274,36 @@ async function* parseAnthropicStream(
     const eventType = typeof payload.type === "string" ? payload.type : "";
 
     switch (eventType) {
+      // ---- Usage: 记录 input tokens ----
+      case "message_start": {
+        const msg = payload.message as Record<string, unknown> | undefined;
+        if (msg?.usage) {
+          const usage = msg.usage as Record<string, unknown>;
+          if (typeof usage.input_tokens === "number") {
+            anthropicInputTokens = usage.input_tokens;
+          }
+        }
+        break;
+      }
+
+      // ---- Usage: 产出 token 用量 ----
+      case "message_delta": {
+        const delta = payload.delta as Record<string, unknown> | undefined;
+        const usage = delta?.usage as Record<string, unknown> | undefined;
+        if (usage) {
+          const outputTokens =
+            typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+          if (anthropicInputTokens > 0 || outputTokens > 0) {
+            yield {
+              type: "usage",
+              inputTokens: anthropicInputTokens,
+              outputTokens,
+            } satisfies StreamUsagePart;
+          }
+        }
+        break;
+      }
+
       case "content_block_delta": {
         const delta = payload.delta as Record<string, unknown> | undefined;
         if (!delta) {

@@ -17,7 +17,19 @@ const LanguageModelThinkingPart = (
 ).LanguageModelThinkingPart;
 
 /** Token usage data part MIME type */
-const USAGE_MIME_TYPE = "usage";
+const USAGE_MIME_TYPE = "application/vnd.codex.token-usage";
+
+/** VS Code proposed API: LanguageModelDataPart for usage reporting */
+interface DataPartStatic {
+  new (data: Uint8Array, mimeType: string): vscode.LanguageModelResponsePart & { data: Uint8Array; mimeType: string };
+  json(value: unknown, mime?: string): vscode.LanguageModelResponsePart & { data: Uint8Array; mimeType: string };
+  image(data: Uint8Array, mime: string): vscode.LanguageModelResponsePart & { data: Uint8Array; mimeType: string };
+  text(value: string, mime?: string): vscode.LanguageModelResponsePart & { data: Uint8Array; mimeType: string };
+}
+
+const LanguageModelDataPart = (vscode as unknown as {
+  LanguageModelDataPart?: DataPartStatic;
+}).LanguageModelDataPart;
 
 export class GptslLanguageModelProvider
   implements vscode.LanguageModelChatProvider
@@ -180,6 +192,19 @@ export class GptslLanguageModelProvider
           progress.report(new vscode.LanguageModelTextPart(part.text));
         } else if (part.type === "thinking") {
           bufferThinkingContent(part.text);
+        } else if (part.type === "usage") {
+          // 通过 DataPart 回传 token 用量给 Copilot Chat
+          if (LanguageModelDataPart) {
+            const usageData = {
+              inputTokens: part.inputTokens,
+              outputTokens: part.outputTokens,
+            };
+            try {
+              progress.report(LanguageModelDataPart.json(usageData, USAGE_MIME_TYPE));
+            } catch {
+              /* ignore usage report errors */
+            }
+          }
         } else if (part.type === "tool_call") {
           let parsedArgs: Record<string, unknown>;
           try {
