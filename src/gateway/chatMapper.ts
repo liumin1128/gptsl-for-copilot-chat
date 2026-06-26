@@ -1,13 +1,17 @@
 import * as vscode from "vscode";
 import {
   OpenAIResponsesInputItem,
+  OpenAIResponsesInputText,
+  OpenAIResponsesInputImage,
   OpenAIResponsesFunctionCall,
   OpenAIResponsesFunctionCallOutput,
   AnthropicMessage,
   AnthropicContentBlock,
   AnthropicToolUseBlock,
   AnthropicToolResultBlock,
+  AnthropicImageBlock,
 } from "./types";
+import { isImagePart, toBase64 } from "../utils/imageHelper";
 
 // ---- OpenAI Responses API 格式转换 ----
 
@@ -25,6 +29,7 @@ export function toOpenAIResponsesInput(
   for (const m of messages) {
     const role = mapRole(m);
     const textParts: string[] = [];
+    const imageParts: OpenAIResponsesInputImage[] = [];
     const toolCalls: OpenAIResponsesFunctionCall[] = [];
     const toolResults: OpenAIResponsesFunctionCallOutput[] = [];
 
@@ -57,6 +62,14 @@ export function toOpenAIResponsesInput(
             status: "completed",
           });
         }
+      } else if (isImagePart(part)) {
+        const base64 = toBase64(part.data);
+        const imageUrl = `data:${part.mimeType};base64,${base64}`;
+        imageParts.push({
+          type: "input_image",
+          image_url: imageUrl,
+          detail: "high",
+        });
       }
     }
 
@@ -84,9 +97,18 @@ export function toOpenAIResponsesInput(
       input.push(tr);
     }
 
-    // 用户消息
-    if (role === "user" && joinedText) {
-      input.push({ role: "user", content: joinedText });
+    // 用户消息: 有图片时用数组格式，无图片时保持字符串
+    if (role === "user" && (joinedText || imageParts.length > 0)) {
+      if (imageParts.length > 0) {
+        const contentItems: (OpenAIResponsesInputText | OpenAIResponsesInputImage)[] = [];
+        if (joinedText) {
+          contentItems.push({ type: "input_text", text: joinedText });
+        }
+        contentItems.push(...imageParts);
+        input.push({ role: "user", content: contentItems });
+      } else if (joinedText) {
+        input.push({ role: "user", content: joinedText });
+      }
     }
   }
 
@@ -109,6 +131,7 @@ export function toAnthropicMessages(
   for (const m of messages) {
     const role = mapRole(m);
     const textParts: string[] = [];
+    const imageBlocks: AnthropicImageBlock[] = [];
     const toolCalls: AnthropicToolUseBlock[] = [];
     const toolResults: AnthropicToolResultBlock[] = [];
 
@@ -133,6 +156,16 @@ export function toAnthropicMessages(
             content,
           });
         }
+      } else if (isImagePart(part)) {
+        const base64 = toBase64(part.data);
+        imageBlocks.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: part.mimeType,
+            data: base64,
+          },
+        });
       }
     }
 
@@ -149,6 +182,11 @@ export function toAnthropicMessages(
 
     if (joinedText) {
       contentBlocks.push({ type: "text", text: joinedText });
+    }
+
+    // 图片块追加在文本之后
+    for (const img of imageBlocks) {
+      contentBlocks.push(img);
     }
 
     if (role === "assistant") {

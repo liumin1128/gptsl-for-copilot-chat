@@ -6,8 +6,25 @@ export interface ChatMessage {
 /** VS Code 消息转换为网关消息时使用的中间格式 */
 export interface OpenAIResponsesInputMessage {
   role: "user" | "assistant" | "system";
-  content: string;
+  content: string | (OpenAIResponsesInputText | OpenAIResponsesInputImage)[];
 }
+
+/** OpenAI Responses API 图片内容块（content 数组项） */
+export interface OpenAIResponsesInputImage {
+  type: "input_image";
+  image_url: string;
+  detail?: "high" | "low" | "auto";
+}
+
+/** OpenAI Responses API 文本内容块（content 数组项） */
+export interface OpenAIResponsesInputText {
+  type: "input_text";
+  text: string;
+}
+
+export type OpenAIResponsesUserContent =
+  | string
+  | (OpenAIResponsesInputText | OpenAIResponsesInputImage)[];
 
 export interface OpenAIResponsesFunctionCall {
   type: "function_call";
@@ -55,11 +72,22 @@ export interface AnthropicThinkingBlock {
   signature?: string;
 }
 
+/** Anthropic image block */
+export interface AnthropicImageBlock {
+  type: "image";
+  source: {
+    type: "base64";
+    media_type: string;
+    data: string;
+  };
+}
+
 export type AnthropicContentBlock =
   | AnthropicTextBlock
   | AnthropicToolUseBlock
   | AnthropicToolResultBlock
-  | AnthropicThinkingBlock;
+  | AnthropicThinkingBlock
+  | AnthropicImageBlock;
 
 export interface AnthropicMessage {
   role: "user" | "assistant";
