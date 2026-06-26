@@ -119,6 +119,10 @@ npm run compile
 
 Press `F5` in VS Code to start an Extension Development Host for debugging.
 
+## Privacy
+
+This extension does not store or collect any user information in any form.
+
 ## License
 
 MIT
